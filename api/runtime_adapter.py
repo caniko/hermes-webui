@@ -66,8 +66,12 @@ class RunStatus:
     pending_clarify_id: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=True, unsafe_hash=False)
 class ControlResult:
+    # NOTE: `payload: dict` makes this dataclass unhashable by design.
+    # `unsafe_hash=False` makes that explicit so future maintainers don't try
+    # to add `frozen=True`-implied hashability back (would silently break the
+    # moment any caller adds dict / list fields). Opus advisor stage-384 followup.
     accepted: bool
     status: str = "accepted"
     event_id: str | None = None
