@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Installed/mobile PWA sessions now support an edge swipe from the left side of the screen to open the mobile sidebar drawer, while preserving the existing hamburger and overlay controls.
+
 ## [v0.51.129] — 2026-05-24 — Release DA (stage-batch11 — 4-PR feature + perf batch)
 
 ### Performance
