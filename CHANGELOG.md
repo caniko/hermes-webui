@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sidebar chat search now highlights matching title text and shows a subtle content preview for body-only matches.
+
 ## [v0.51.137] — 2026-05-25 — Release DI (stage-batch19 — 6-PR medium-risk batch)
 
 ### Added
