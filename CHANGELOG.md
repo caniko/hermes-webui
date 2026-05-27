@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Plain-text `webui_prefill_messages_script` output is now wrapped as a `user` prefill message instead of an extra `system` message, keeping dynamic recall context provider-safe while preserving explicit JSON message roles.
+
 ## [v0.51.145] — 2026-05-26 — Release DQ (stage-batch27 — sidebar running-state preservation)
 
 ### Fixed
