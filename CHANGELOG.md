@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The reasoning-effort selector now offers a `max` level, matching the agent's `hermes_constants.VALID_REASONING_EFFORTS`. This restores parity with the underlying set (the WebUI mirror previously stopped at `xhigh`) so providers such as Anthropic that support the `max` thinking level are selectable from the composer dropdown and the `/reasoning` command.
+
 ### Changed
 
 - WebUI's browser-session surface prompt now explicitly tells agents not to dump browser transcripts into external notes or durable memory by default; it limits saving to explicit captures and clearly reusable durable signals such as preferences, decisions, blockers, and runbook-worthy workflows.
