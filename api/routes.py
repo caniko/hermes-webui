@@ -2276,7 +2276,13 @@ def _messages_include_tool_metadata(messages) -> bool:
 
 
 def _tool_calls_for_message_window(tool_calls, start_idx: int, message_count: int) -> list:
-    """Keep session-level tool calls that point into a returned message window."""
+    """Keep session-level tool calls that point into a returned message window.
+
+    ``assistant_msg_idx`` is stored in the full transcript coordinate space, but
+    the frontend renders the returned ``messages`` array from index 0. Rebase the
+    index into the returned window so legacy session-level tool cards still
+    anchor to their visible assistant turn after paginated loads.
+    """
     if not isinstance(tool_calls, list) or message_count <= 0:
         return []
     end_idx = start_idx + message_count
@@ -2288,7 +2294,9 @@ def _tool_calls_for_message_window(tool_calls, start_idx: int, message_count: in
         if isinstance(assistant_idx, bool) or not isinstance(assistant_idx, int):
             continue
         if start_idx <= assistant_idx < end_idx:
-            filtered.append(tool_call)
+            rebased = dict(tool_call)
+            rebased["assistant_msg_idx"] = assistant_idx - start_idx
+            filtered.append(rebased)
     return filtered
 
 
