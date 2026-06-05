@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.264] — 2026-06-04 — Release IF (stage-r14 — sidebar cron-overflow + messaging source labels, un-held)
+
+### Fixed
+- **Cron sessions no longer flood the CLI session window in the sidebar** (so Discord/Telegram/Slack sessions stop vanishing from it). `_load_cli_sessions_uncached()` passed `exclude_sources=None`, overriding the default `("cron","webui")` exclusion, so hundreds of cron rows filled the 20-row visible limit. (#3585, @rodboev)
+- **Imported messaging sessions keep their source label after a sidebar refresh, and open + send correctly.** `_load_cli_sessions_uncached()` hardcoded `is_cli_session: True` for every state.db row; it now uses `is_cli_session_row()` so Discord/Telegram/Slack rows classify correctly, and the sidebar open/import path was extended (`_isMessagingSession()`) so opening a reclassified messaging session still imports it (no transient stub → no `/api/chat/start` 404 on the next send). (#3586, @rodboev)
+
 ## [v0.51.263] — 2026-06-04 — Release IE (stage-r13 — codex-runtime slash command + activity-default test)
 
 ### Fixed
