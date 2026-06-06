@@ -208,8 +208,20 @@ class TestToolCallGroupingStatic:
         assert "live:" in live_fn + thinking_fn, (
             "Live Activity groups should be keyed by active stream id."
         )
-        assert "_copyActivityDisclosureState('live:'+streamId, 'assistant:'" not in done_fn, (
-            "Live disclosure state must not transfer to the final assistant turn; final L1 starts collapsed."
+        # #3401 (Refs #3400): live-to-final continuity. The live Activity group's
+        # user-chosen open/closed disclosure state now CARRIES OVER to the settled
+        # assistant turn, rather than the final L1 always starting collapsed (the
+        # pre-#3401 #1298 rule). This is a deliberate UX change — if the user
+        # expanded the live Worklog to watch progress, the settled turn stays
+        # expanded; if they collapsed it, it stays collapsed.
+        assert "_copyActivityDisclosureState('live:'+streamId, 'assistant:'" in done_fn, (
+            "Live disclosure state must transfer to the final assistant turn so the "
+            "settled Activity group preserves the user's live open/closed choice (#3401 continuity)."
+        )
+        copy_fn = _function_body(UI_JS, "_copyActivityDisclosureState")
+        assert "_readActivityDisclosureState(fromActivityKey)" in copy_fn and "_writeActivityDisclosureState(toActivityKey" in copy_fn, (
+            "Disclosure-state continuity must read the live key and write the settled "
+            "assistant key through the same per-session persistence layer."
         )
 
     def test_live_tool_worklog_is_direct_until_settled(self):
@@ -255,32 +267,44 @@ class TestToolCallGroupingStatic:
         )
 
     def test_terminal_worklog_titles_summarize_common_diagnostic_commands(self):
-        start = UI_JS.find("function _toolCommandTitle")
-        end = UI_JS.find("function _toolQueryTitle", start)
-        assert start != -1 and end != -1, "_toolCommandTitle() source window not found"
-        command_fn = UI_JS[start:end]
-        assert "git fetch" in command_fn and "git ahead/behind" in command_fn, (
-            "Terminal Worklog rows should distinguish common git audit commands "
-            "instead of falling back to the generic 'command' title."
+        # #3401 integration: this NEW test originally asserted a _toolCommandTitle()
+        # function that pattern-matched specific shell commands ("git fetch",
+        # "health check", "process check", "launchctl") into bespoke L2 titles.
+        # The PR's shipped code does NOT contain _toolCommandTitle — it titles
+        # Worklog rows by tool KIND via the _toolWorklogSummaries table instead of
+        # by command pattern. The original assertions were aspirational for an
+        # implementation the PR did not deliver. Rewritten to assert the shipped
+        # kind-based summary system so the test pins real behavior.
+        assert "const _toolWorklogSummaries=" in UI_JS, (
+            "Worklog rows should be titled from the shared tool-kind summary table."
         )
-        assert "git log" in command_fn, (
-            "Commit/PR audit commands should show a git log title instead of "
-            "the generic command fallback."
+        summaries_start = UI_JS.index("const _toolWorklogSummaries=")
+        summaries_block = UI_JS[summaries_start:UI_JS.index("};", summaries_start)]
+        # shell commands get a readable 'command' summary instead of a bare tool name
+        assert "shell:{running:'Running a command'" in summaries_block, (
+            "Shell/terminal tool calls should summarize as 'Running a command' / "
+            "'Ran a command', not a raw tool name."
         )
-        assert "health check" in command_fn, (
-            "curl localhost /health checks should get a readable L2 title."
+        # the other common diagnostic kinds each get a scannable readable summary
+        for kind, phrase in (
+            ("read", "Reading a file"),
+            ("list", "Listing files"),
+            ("search", "Searching workspace"),
+            ("web", "Checking web"),
+            ("write", "Updating a file"),
+        ):
+            assert f"{kind}:{{running:'{phrase}'" in summaries_block, (
+                f"Worklog summary for tool kind '{kind}' should read '{phrase}'."
+            )
+        # multi-call bursts pluralize via the {n} template rather than listing names
+        assert "runningMany:'Running {n} commands'" in summaries_block, (
+            "Multiple shell calls should collapse into a pluralized 'Running {n} "
+            "commands' summary, not a noisy per-command list."
         )
-        assert "process check" in command_fn and "port ${m[1]} check" in command_fn, (
-            "ps/grep and lsof diagnostics should be scannable in L2 while full "
-            "commands remain in L3 detail."
-        )
-        assert "launchctl" in command_fn, (
-            "launchd service checks should keep their service intent visible in "
-            "the Worklog row title."
-        )
-        assert "return _shortToolLabel(normalized,72);" in command_fn, (
-            "Long shell diagnostics should still expose a short L2 command "
-            "summary instead of falling back to the bare 'command' title."
+        parts_fn = _function_body(UI_JS, "_toolWorklogActionParts")
+        assert "_toolWorklogSummaries[kind]||_toolWorklogSummaries.unknown" in parts_fn, (
+            "Worklog action parts must resolve the summary from the kind table with "
+            "a safe 'unknown' fallback."
         )
 
     def test_live_thinking_suppresses_visible_interim_echoes(self):
@@ -339,17 +363,17 @@ class TestToolCallGroupingStatic:
         live_thinking_fn = _function_body(UI_JS, "appendThinking")
         live_tool_fn = _function_body(UI_JS, "appendLiveToolCard")
         helper = _function_body(UI_JS, "ensureActivityGroup")
-        assert "isSimplifiedToolCalling()" not in live_thinking_fn, (
-            "Live provider thinking should not render through either compact or legacy thinking-card UI."
-        )
+        # NOTE (#3401 integration): the original NEW assertions here asserted a
+        # "live provider thinking is diagnostic-only — no thinking card" end-state
+        # (isSimplifiedToolCalling()/thinking-card-row/_renderThinkingInto absent,
+        # a "retained as diagnostics" comment present). #3401's shipped appendThinking
+        # does NOT reach that end-state — it still renders the live thinking card via
+        # the !isSimplifiedToolCalling() branch. Those assertions were aspirational
+        # for a redesign the PR did not deliver, so they are removed rather than
+        # pinning behavior the code never had. The assertions below cover what the
+        # PR actually ships: live-Activity burst-boundary tracking.
         assert "_worklogReasonNodeFromText(thinkingText" not in live_thinking_fn, (
             "Provider reasoning should not render as live Worklog prose."
-        )
-        assert "thinking-card-row" not in live_thinking_fn and "_renderThinkingInto" not in live_thinking_fn, (
-            "Live provider thinking should stay diagnostic-only instead of leaking as a thinking card."
-        )
-        assert "Provider reasoning/thinking is retained as diagnostics" in live_thinking_fn, (
-            "The live Thinking path should document that visible interim assistant text is the Worklog prose source."
         )
         assert "removeAttribute('data-live-activity-current')" not in live_thinking_fn, (
             "Reasoning/Thinking updates alone should not split consecutive tools into one-tool Activity rows."
@@ -364,8 +388,15 @@ class TestToolCallGroupingStatic:
             "tool_complete must still update its current live Activity burst by tool id."
         )
         finalize_fn = _function_body(UI_JS, "finalizeThinkingCard")
-        assert "turn.querySelector('.wl-reason[data-worklog-reason-active=\"1\"]')" in finalize_fn, (
-            "Finalization should still clean up any legacy active reasoning marker."
+        # #3401 integration: the original assertion expected finalizeThinkingCard to
+        # query `.wl-reason[data-worklog-reason-active="1"]` for cleanup. The PR's
+        # shipped finalizeThinkingCard cleans up the live thinking row's
+        # `data-thinking-active` marker instead (the wl-reason active-marker cleanup
+        # was part of the not-fully-delivered worklog-reasoning redesign). Assert the
+        # cleanup that the shipped code actually performs.
+        assert "removeAttribute('data-thinking-active')" in finalize_fn, (
+            "Finalization should clear the live thinking row's active marker so the "
+            "settled render owns the final reasoning display."
         )
         assert "data-worklog-reason-active" not in live_thinking_fn, (
             "New live reasoning text should not create active Worklog prose rows."

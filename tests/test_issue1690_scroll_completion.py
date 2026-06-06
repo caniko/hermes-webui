@@ -51,17 +51,33 @@ def test_terminal_done_render_preserves_manual_scroll_after_active_stream_is_cle
 def test_render_messages_preserve_scroll_option_uses_user_pin_state_not_stream_liveness():
     render_body = _function_body(UI_JS, "renderMessages")
     scroll_helper = _function_body(UI_JS, "_scrollAfterMessageRender")
-    follow_helper = _function_body(UI_JS, "_followMessagesAfterDomReplace")
 
     assert "function renderMessages(options)" in render_body
     assert "const preserveScroll=!!(options&&options.preserveScroll);" in render_body
     assert "_scrollAfterMessageRender(preserveScroll, scrollSnapshot);" in render_body
     assert "const scrollSnapshot=preserveScroll?_captureMessageScrollSnapshot():null" in render_body
-    assert "if(_followMessagesAfterDomReplace()) return;" in scroll_helper
-    assert "_restoreMessageScrollSnapshot(scrollSnapshot);" in scroll_helper
-    assert "_shouldFollowMessagesOnDomReplace()" in follow_helper
-    assert "scrollToBottom();" in follow_helper
-    assert "if(S.activeStreamId){\n    scrollIfPinned();\n    return;\n  }" in scroll_helper
+    # #3401 consolidated the old _followMessagesAfterDomReplace() wrapper into
+    # _scrollAfterMessageRender(). The intent is unchanged: when preserveScroll is
+    # set, the user's manual pin state (_scrollPinned) — NOT stream liveness
+    # (S.activeStreamId) — decides whether to stay at bottom or restore the
+    # captured pre-render scroll position.
+    assert "if(preserveScroll){" in scroll_helper, (
+        "preserveScroll must be the first branch — user pin state decides, not stream liveness"
+    )
+    assert "if(_scrollPinned) scrollIfPinned();" in scroll_helper, (
+        "a pinned user stays at the bottom across the DOM rebuild"
+    )
+    assert "else _restoreMessageScrollSnapshot(scrollSnapshot);" in scroll_helper, (
+        "a user who scrolled up has their pre-render scrollTop restored, not snapped to bottom"
+    )
+    # The preserveScroll branch must return BEFORE the S.activeStreamId fallback,
+    # so a still-live stream can't override the user's manual scroll choice.
+    preserve_idx = scroll_helper.index("if(preserveScroll){")
+    stream_idx = scroll_helper.index("if(S.activeStreamId){")
+    assert preserve_idx < stream_idx, (
+        "the preserveScroll (user-pin) branch must take precedence over the "
+        "stream-liveness fallback"
+    )
 
 
 def test_cached_render_path_uses_same_scroll_policy_as_fresh_render():

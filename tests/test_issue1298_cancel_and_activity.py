@@ -317,19 +317,44 @@ class TestIssue1298ActivityGroupExpandPersistence:
         )
 
     def test_finalize_thinking_card_respects_user_expand(self):
-        """finalizeThinkingCard() must not force-collapse the live Worklog."""
+        """finalizeThinkingCard() must not force-collapse the live Worklog when the
+        user has explicitly expanded it."""
         src = (REPO_ROOT / "static" / "ui.js").read_text()
-        m = re.search(
-            r"function finalizeThinkingCard\(\)\{(.*?)\n\}",
-            src, re.DOTALL,
-        )
-        assert m, "finalizeThinkingCard() must exist in ui.js"
-        body = m.group(1)
-        assert "tool-call-group-collapsed" not in body, (
-            "Live Worklog must remain expanded until the settled render replaces "
-            "it with the final collapsed L1 Activity summary."
-        )
-        assert "aria-expanded','false'" not in body
+        # Brace-match the function body (the old non-greedy `(.*?)\n\}` regex stopped
+        # at the first `\n}` and missed #3401's larger simplified-tool-calling branch).
+        start = src.index("function finalizeThinkingCard()")
+        brace = src.index("{", start)
+        depth = 0
+        body = ""
+        for i in range(brace, len(src)):
+            if src[i] == "{":
+                depth += 1
+            elif src[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = src[brace + 1 : i]
+                    break
+        assert body, "finalizeThinkingCard() must exist in ui.js"
+        # #3401 (Refs #1298): the collapse is now CONDITIONAL — finalize only adds
+        # `tool-call-group-collapsed` when the user has NOT manually expanded the
+        # live activity group (and hasn't been overridden by the expanded default).
+        # So the presence of the class string alone is no longer the right check;
+        # the guard is. Assert the guard gates the collapse so an explicit user
+        # expand is respected.
+        if "tool-call-group-collapsed" in body:
+            collapse_idx = body.index("tool-call-group-collapsed")
+            guard_idx = body.rfind("_liveActivityUserExpanded !== true", 0, collapse_idx)
+            assert guard_idx != -1, (
+                "finalizeThinkingCard() force-collapses the live Worklog without first "
+                "checking _liveActivityUserExpanded — an explicit user expand must be respected (#1298)."
+            )
+        # An unconditional aria-expanded=false (outside the user-expand guard) would
+        # also clobber the user's choice; the only such write must sit under the guard.
+        for am in re.finditer(r"aria-expanded',\s*'false'", body):
+            guard_before = body.rfind("_liveActivityUserExpanded !== true", 0, am.start())
+            assert guard_before != -1, (
+                "aria-expanded='false' must only be set inside the _liveActivityUserExpanded guard."
+            )
 
     def test_inline_onclick_records_user_intent(self):
         """The summary button's click path must call _onLiveActivityToggle

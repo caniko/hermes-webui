@@ -92,7 +92,6 @@ def test_user_scroll_cancels_delayed_bottom_settling():
 def test_preserve_scroll_restores_unpinned_viewport_after_dom_rebuild():
     render = _function_body(UI_JS, "function renderMessages")
     after_render = _function_body(UI_JS, "function _scrollAfterMessageRender")
-    follow = _function_body(UI_JS, "function _followMessagesAfterDomReplace")
     restore = _function_body(UI_JS, "function _restoreMessageScrollSnapshot")
 
     snapshot_idx = render.index("const scrollSnapshot=preserveScroll?_captureMessageScrollSnapshot():null")
@@ -103,9 +102,12 @@ def test_preserve_scroll_restores_unpinned_viewport_after_dom_rebuild():
         "renderMessages({preserveScroll:true}) must capture #messages.scrollTop before "
         "replacing transcript DOM, then pass that snapshot to the post-render scroll helper"
     )
-    assert "if(_followMessagesAfterDomReplace()) return;" in after_render
-    assert "_restoreMessageScrollSnapshot(scrollSnapshot)" in after_render
-    assert "_shouldFollowMessagesOnDomReplace()" in follow
-    assert "scrollToBottom();" in follow
+    # #3401 consolidated the old _followMessagesAfterDomReplace() wrapper into
+    # _scrollAfterMessageRender(). Same invariant: an unpinned user's pre-render
+    # viewport is restored after the DOM rebuild rather than snapped to bottom.
+    assert "if(preserveScroll){" in after_render
+    assert "else _restoreMessageScrollSnapshot(scrollSnapshot);" in after_render, (
+        "an unpinned user (preserveScroll, not pinned) must have their snapshot restored"
+    )
     assert "el.scrollTop=Math.max(0,Math.min(Number(snapshot.top)||0,maxTop))" in restore
     assert "_programmaticScroll=true" in restore

@@ -24,7 +24,15 @@ def test_workspace_artifacts_tab_collects_session_files_and_previews_them():
     assert "panel.dataset.activeTab = _workspacePanelActiveTab" in WORKSPACE_JS
     assert "renderSessionArtifacts();" in SESSIONS_JS
     assert "typeof scheduleRenderSessionArtifacts==='function'" in MESSAGES_JS
-    assert "S.toolCalls=d.session.tool_calls.map" in MESSAGES_JS
+    # #3401 hydrates persisted tool_calls on session load via
+    # _mergeSettledToolCallsWithLiveMetadata(d.session.tool_calls) instead of a bare
+    # `d.session.tool_calls.map(...)`. The merge helper still marks every settled
+    # tool call done ({...raw, done:true}) — preserving the artifact-collection
+    # invariant — while also carrying over live duration/started_at metadata.
+    assert "S.toolCalls=_mergeSettledToolCallsWithLiveMetadata(d.session.tool_calls)" in MESSAGES_JS
+    assert "const next={...(raw||{}),done:true};" in MESSAGES_JS, (
+        "settled tool calls must be marked done so collectSessionArtifacts() sees them as completed"
+    )
     assert ".workspace-artifact-item" in STYLE_CSS
 
 

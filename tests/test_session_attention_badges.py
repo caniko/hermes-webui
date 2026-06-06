@@ -148,6 +148,20 @@ def test_session_sidebar_renders_attention_badge_and_semantic_classes():
     assert ".session-item.attention-clarify" in style_css
     # The text-badge styles were removed; the dot now carries the color.
     assert ".session-attention-badge" not in style_css
+    # #3401 integration: the colored attention styling is driven by the
+    # `.session-item.attention-{approval,clarify}` parent rules (inset rail + tint);
+    # the dot gets `is-attention-{approval,clarify,generic}` classes from sessions.js
+    # (renderSessionList). The approval dot additionally has an indicator-level rule
+    # to suppress its pulse animation. clarify/generic intentionally inherit the
+    # base indicator color via the parent .session-item rule rather than a dedicated
+    # indicator selector, so assert the parent rules + the JS class application
+    # rather than an indicator-level `.is-attention-clarify` rule the PR doesn't emit.
     assert ".session-state-indicator.is-attention-approval" in style_css
-    assert ".session-state-indicator.is-attention-clarify" in style_css
+    assert "is-attention-clarify" in sessions_js, (
+        "renderSessionList must tag the state indicator with is-attention-clarify "
+        "so the clarify attention dot is colored."
+    )
+    assert ".session-item.attention-clarify{box-shadow:inset 3px 0 0 var(--warning)" in style_css, (
+        "clarify attention must render the warning-colored inset rail on the session row."
+    )
     assert "prefers-reduced-motion" in style_css

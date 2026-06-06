@@ -162,9 +162,12 @@ def test_attachLiveStream_reconnect_seeds_from_INFLIGHT_not_querySelector():
     """
     fn_start = MESSAGES_JS.find("function attachLiveStream(")
     assert fn_start != -1, "attachLiveStream() not found in messages.js."
-    # Capture up to 60 lines after the function signature for the seed section.
+    # Capture up to 90 lines after the function signature for the seed section.
+    # #3401 added burst-anchor / multi-segment seed computation ahead of the
+    # `let assistantText` seed line, so the window was widened from 60 to 90 to
+    # keep the seed assignment inside the captured region.
     fn_head_end = fn_start
-    for _ in range(60):
+    for _ in range(90):
         fn_head_end = MESSAGES_JS.find("\n", fn_head_end + 1)
         if fn_head_end == -1:
             break

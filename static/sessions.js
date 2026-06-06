@@ -413,8 +413,34 @@ function _reconcileActiveSessionIdleStateFromList(serverRows) {
   }
   _sessionStreamingById.set(sid, false);
   _forgetObservedStreamingSession(sid);
+  if (changed) {
+    // The server says this run is idle, but the live pane may still show stale
+    // chrome from a stream whose stream_end we missed (e.g. a dropped SSE during
+    // a background tab). Clear the live-only UI so the active pane matches server
+    // truth. These helpers are all no-ops when their target UI isn't present. (#2454)
+    if (typeof hideApprovalCard==='function') hideApprovalCard(true);
+    if (typeof hideLiveRunStatus==='function') hideLiveRunStatus(sid);
+    if (typeof clearLiveToolCards==='function') clearLiveToolCards();
+    // Reload the transcript from server truth so a missed stream_end can't leave
+    // the active pane showing a half-finished live turn. Deferred + guarded so it
+    // can't fight an in-flight send or a session the user has since navigated away from.
+    _scheduleActiveSessionIdleReload(sid);
+  }
   if (changed&&typeof updateSendBtn==='function') updateSendBtn();
   return changed;
+}
+
+function _scheduleActiveSessionIdleReload(sid) {
+  // Defer one tick so the optimistic merge + render settle first, then reload the
+  // current transcript from server truth. Guards: skip if the user navigated to a
+  // different session, or if a new send/stream started in the meantime. (#2454)
+  setTimeout(async () => {
+    if (!S || !S.session || S.session.session_id !== sid) return;
+    if (S.busy || S.activeStreamId) return;
+    if (typeof loadSession === 'function') {
+      await loadSession(sid, {force:true, externalRefreshReason:'idle-reconcile'});
+    }
+  }, 0);
 }
 
 function _purgeStaleInflightEntries() {

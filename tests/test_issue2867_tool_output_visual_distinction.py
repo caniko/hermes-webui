@@ -22,6 +22,12 @@ def test_tool_card_badge_style_is_absent():
 
 
 def test_tool_cards_use_legacy_muted_rail():
-    assert '.tool-card{background:var(--surface-subtle);' in STYLE_CSS
-    assert 'border-left:2px solid var(--border-muted)' in STYLE_CSS
+    # #3401 restyled the tool card: the muted background + muted rail are now set
+    # with !important and the left rail color is pinned via border-left-color
+    # (var(--border2)) rather than a `border-left:2px solid var(--border-muted)`
+    # shorthand. The invariant is unchanged — tool cards use a MUTED rail, never the
+    # bright accent rail — so assert the new form + the still-forbidden accent rail.
+    assert '.tool-card{background:var(--surface-subtle)!important;' in STYLE_CSS
+    assert 'border-color:var(--border-muted)!important' in STYLE_CSS
+    assert 'border-left-color:var(--border2)!important' in STYLE_CSS
     assert 'border-left:3px solid var(--accent-bg-strong)' not in STYLE_CSS
