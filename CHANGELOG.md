@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Help tab buttons stay readable on hover across every theme.** The secondary Help card button ("Open GitHub Issues") filled with the accent color on hover but set its text to `--accent-text`, which in most themes equals the accent itself — so the label vanished (same-color text on the fill). Hover text now uses the page-background color (`--bg`), which the accent is designed to contrast against, restoring a readable solid-fill hover in all themes. (#3518 follow-up)
+
 ## [v0.51.325] — 2026-06-08 — Release KO (in-app Help tab)
 
 ### Added
