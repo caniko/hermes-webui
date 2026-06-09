@@ -91,18 +91,18 @@ def test_capture_is_gated_on_streaming_session():
     assert "dataset.sessionId" in failsafe
 
 
-def test_reattach_keeps_longer_live_segment_and_reuses_merge_helper():
+def test_reattach_keeps_longer_live_segment_via_length_gated_swap():
     """After the rebuild, the preserved node is swapped back only when it carries MORE
-    streamed text than the rebuilt live turn, reusing the existing merge helper so the
-    longer live segment wins (never blanks the visible reply)."""
+    streamed text than the rebuilt live turn. The length guard establishes the preserved
+    (parser) node strictly wins, so a plain replaceWith is sufficient — no segment merge
+    is needed (a merge would be a no-op under this guard), and the in-progress reply is
+    never blanked."""
     body = _function_body(UI_JS, "renderMessages")
     reattach = body[body.find("Re-attach the preserved live turn (#3877)") :]
     assert reattach, "the #3877 re-attach block is missing"
     # Length comparison gates the swap (only restore when preserved has more text).
     assert "_liveAssistantSegmentTextLength" in reattach
     assert "_rebuiltLen<_preservedLen" in reattach
-    # Reuses the existing live-segment merge machinery (keeps the longer segment).
-    assert "_mergeRestoredLiveAssistantSegment" in reattach
     # The swap replaces the rebuilt node with the preserved (parser-referenced) node.
     assert "replaceWith(_preservedLiveTurn)" in reattach
 

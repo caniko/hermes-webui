@@ -8812,9 +8812,12 @@ function renderMessages(options){
   // ORIGINAL node (still referenced by the smd parser) holds the real in-progress
   // reply. If the rebuilt live turn has less streamed text than the preserved one,
   // swap the preserved node back in so the parser target stays connected and the
-  // visible text never blanks. Reuses _mergeRestoredLiveAssistantSegment to keep
-  // the longer live segment. No-op when the rebuild already produced equal/more
-  // content (settled turn) or when nothing was streaming.
+  // visible text never blanks. The length guard below already establishes that the
+  // preserved (parser) node carries strictly MORE streamed text than the rebuilt
+  // one, so a plain replaceWith is sufficient — no segment merge is needed (during
+  // a live stream the rebuilt node's live content is empty/shorter, never longer,
+  // and the guard skips the swap entirely when the rebuild has equal/more content).
+  // No-op for a settled turn or when nothing was streaming.
   if(_preservedLiveTurn){
     const _rebuilt=document.getElementById('liveAssistantTurn');
     const _preservedLen=_liveAssistantSegmentTextLength(
@@ -8827,7 +8830,6 @@ function renderMessages(options){
       if(_rebuiltLen<_preservedLen){
         if(S.session) _preservedLiveTurn.dataset.sessionId=S.session.session_id;
         if(_rebuilt){
-          _mergeRestoredLiveAssistantSegment(_preservedLiveTurn, _rebuilt);
           _rebuilt.replaceWith(_preservedLiveTurn);
         }else{
           inner.appendChild(_preservedLiveTurn);
