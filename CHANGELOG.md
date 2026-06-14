@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.415] — 2026-06-14 — Release OB (keep complete sidebar metadata on the index fastpath, #4166)
+
+### Fixed
+
+- **The session sidebar no longer re-reads every session's sidecar file on each `/api/sessions` poll.** A complete `_index.json` row (one that carries `message_count`, `user_message_count`, and `last_message_at`) now stays on the index fastpath even when the sidecar file's mtime is newer than the row's logical timestamp — a pattern that is common after compression and previously turned each sidebar poll into hundreds of per-sidecar JSON prefix scans. The mtime "rescue" reload is kept for incomplete, legacy, and stale-zero-message rows whose counters can't be trusted, so sidebar correctness is unchanged while the steady-state poll cost drops. (#4166)
+
 ## [v0.51.414] — 2026-06-14 — Release OA (fix misleading regenerate-title error message, #4186)
 
 ### Fixed
