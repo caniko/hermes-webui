@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Selected chat text now appears as readable quote cards above the composer and as clean quoted blocks in sent messages.** The safer named-context behavior from #2543 is preserved — selections are still flushed as labeled Markdown quotes on send — but the pending context UI now shows a calm card with a left accent rail, editable label, remove action, and a clipped text excerpt, while the sent user bubble renders that generated context as a styled `figure`/`blockquote` instead of literal Markdown syntax.
+
 ## [v0.51.482] — 2026-06-17 — Release QR (archived cron sessions stay hidden)
 
 ### Fixed
