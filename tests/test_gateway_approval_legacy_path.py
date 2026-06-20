@@ -5,7 +5,9 @@ PR #4495 fixed the runs API path but left the legacy path without approval handl
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from api.gateway_chat import _gateway_runs_approval_event
 
@@ -108,3 +110,90 @@ def test_approval_event_mapping_rejects_empty():
     """Incomplete payload returns None."""
     assert _gateway_runs_approval_event({"risk_level": "high"}) is None
     assert _gateway_runs_approval_event({}) is None
+
+
+# ---------------------------------------------------------------------------
+# Behavioral regression test — fails on base, passes on head
+# ---------------------------------------------------------------------------
+
+def test_legacy_sse_loop_relays_approval_event():
+    """Legacy /v1/chat/completions SSE loop must relay approval events to the frontend.
+
+    This is the primary regression test for #4549. On the base branch (before
+    the fix), the approval SSE event falls through the delta parser and never
+    produces an ("approval", ...) event, so this test fails. On head (after the
+    fix), the approval handler catches it and emits the event.
+    """
+    from api.config import STREAMS, STREAMS_LOCK
+    from api.gateway_chat import _run_gateway_chat_streaming
+
+    events = []
+    q = MagicMock()
+    q.put_nowait = lambda item: events.append(item)
+
+    stream_id = "sid-legacy-approval"
+    with STREAMS_LOCK:
+        STREAMS[stream_id] = q
+
+    approval_payload = json.dumps({
+        "command": "rm -rf /tmp/test",
+        "description": "Delete temporary files",
+        "pattern_key": "dangerous_command",
+        "pattern_keys": ["dangerous_command"],
+        "approval_id": "appr-legacy-1",
+        "choices": ["once", "session", "always", "deny"],
+    })
+    sse_body = (
+        f"event: approval.request\ndata: {approval_payload}\n\n"
+        'data: {"choices":[{"delta":{"content":"Done"}}]}\n\n'
+        "data: [DONE]\n\n"
+    ).encode()
+
+    mock_session = MagicMock()
+    mock_session.active_stream_id = stream_id
+    mock_session.workspace = "/tmp"
+    mock_session.model = "test"
+    mock_session.model_provider = None
+    mock_session.profile = None
+    mock_session.context_messages = []
+    mock_session.messages = []
+    mock_session.pending_user_message = None
+    mock_session.pending_attachments = None
+    mock_session.pending_started_at = None
+
+    def fake_urlopen(req, *, timeout=None):
+        resp = MagicMock()
+        resp.__iter__ = lambda s: iter(sse_body.split(b"\n"))
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = lambda s, *a: None
+        return resp
+
+    try:
+        with patch.dict("os.environ", {"HERMES_WEBUI_CHAT_BACKEND": "gateway"}):
+            with patch("api.gateway_chat.gateway_supports_approval", return_value=False), \
+                 patch("urllib.request.urlopen", side_effect=fake_urlopen), \
+                 patch("api.gateway_chat.get_session", return_value=mock_session), \
+                 patch("api.gateway_chat._stream_writeback_is_current", return_value=True), \
+                 patch("api.gateway_chat.merge_session_messages_append_only", return_value=[]):
+                _run_gateway_chat_streaming(
+                    session_id="sess-legacy-approval",
+                    msg_text="do something risky",
+                    model="test",
+                    workspace="/tmp",
+                    stream_id=stream_id,
+                )
+    finally:
+        with STREAMS_LOCK:
+            STREAMS.pop(stream_id, None)
+
+    approval_events = [
+        e for e in events
+        if isinstance(e, tuple) and e[0] == "approval"
+    ]
+    assert approval_events, (
+        f"Legacy SSE loop must relay approval events to the frontend. "
+        f"Got events: {[e[0] if isinstance(e, tuple) else e for e in events]}"
+    )
+    assert approval_events[0][1]["command"] == "rm -rf /tmp/test"
+    assert approval_events[0][1]["approval_id"] == "appr-legacy-1"
+    assert approval_events[0][1]["description"] == "Delete temporary files"
