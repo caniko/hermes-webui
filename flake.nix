@@ -77,7 +77,12 @@
       options.services.hermes-webui = {
         enable = lib.mkEnableOption "Hermes WebUI";
 
-        package = lib.mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "hermes-webui" {};
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          defaultText = lib.literalExpression "self.packages.\${system}.default";
+          description = "The hermes-webui package.";
+        };
 
         port = lib.mkOption {
           type = lib.types.port;
